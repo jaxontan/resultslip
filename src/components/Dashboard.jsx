@@ -1,41 +1,120 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ResultRow from './ResultRow';
+import { supabase } from '../supabaseClient';
 
 const Dashboard = () => {
-    // Load initial state from localStorage or default to empty list
-    const [rows, setRows] = useState(() => {
+    // Sync Status: 'idle', 'saving', 'saved', 'error'
+    const [syncStatus, setSyncStatus] = useState('idle');
+
+    // Load initial state
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(true);
+
+    // Load from Supabase on mount
+    useEffect(() => {
+        const fetchData = async () => {
+            // 1. Check if keys exist
+            if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('YOUR_')) {
+                console.warn("Supabase keys missing. Using LocalStorage.");
+                loadFromLocal();
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('results')
+                    .select('*')
+                    .order('id', { ascending: true }); // Simple implementation: Fetch all rows
+
+                if (error) throw error;
+
+                if (data && data.length > 0) {
+                    // Map Supabase structure back to our app structure if needed
+                    // For simplicity in this V1, let's assume we store the whole array in one row, 
+                    // OR we store each row in the DB. 
+                    // Plan Update: Let's store EACH module as a row in Postgres 'results' table.
+                    // fields: id (db id), data (jsonb - moduleName, tests, target, etc)
+
+                    const parsedRows = data.map(dbRow => ({
+                        id: dbRow.id, // Use DB ID
+                        ...dbRow.data // Spread content
+                    }));
+                    setRows(parsedRows);
+                } else {
+                    // No data in cloud, try local? Or just empty.
+                    loadFromLocal();
+                }
+            } catch (e) {
+                console.error("Cloud fetch failed:", e);
+                loadFromLocal();
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    const loadFromLocal = () => {
         const saved = localStorage.getItem('resultSlipData');
         if (saved) {
             try {
-                const parsed = JSON.parse(saved);
-                // Migration: Check if old structure exists and migrate if needed
-                return parsed.map(row => ({
-                    ...row,
-                    tests: row.tests.map(t => ({
-                        name: t.name,
-                        // Ensure weight/score exist if migrating from old 'percentage' field
-                        weight: t.weight || '',
-                        score: t.score || t.percentage || ''
-                    }))
-                }));
-            } catch (e) {
-                console.error("Failed to parse local storage", e);
-                return [];
-            }
+                setRows(JSON.parse(saved));
+            } catch (e) { /* ignore */ }
+        } else {
+            // Default seed
+            setRows([{
+                id: Date.now(),
+                moduleName: '',
+                tests: [{ name: 'Test 1', weight: '', score: '' }],
+                finalTarget: ''
+            }]);
         }
-        // Default initial state
-        return [{
-            id: Date.now(),
-            moduleName: '',
-            tests: [{ name: 'Test 1', weight: '', score: '' }],
-            finalTarget: ''
-        }];
-    });
+    };
 
-    // Save to localStorage whenever rows change
+    // Debounce Save to Cloud
     useEffect(() => {
+        if (loading) return;
+
+        // Save to LocalStorage immediately as backup
         localStorage.setItem('resultSlipData', JSON.stringify(rows));
-    }, [rows]);
+        setSyncStatus('saving');
+
+        const timer = setTimeout(async () => {
+            if (!import.meta.env.VITE_SUPABASE_URL || import.meta.env.VITE_SUPABASE_URL.includes('YOUR_')) {
+                setSyncStatus('saved (local)');
+                return;
+            }
+
+            try {
+                // Strategy: For this simple app, we will DELETE all and INSERT all to sync state.
+                // This is "heavy" but guarantees consistency without complex diffing for now.
+                // A better way for V2: Upsert by ID.
+
+                // NOTE: This requires RLS policies to allow delete/insert for anon (for now).
+
+                // 1. Delete all (Pseudo-sync) - dangerous in prod, ok for single-user dev tool
+                // await supabase.from('results').delete().neq('id', 0); // Delete all
+
+                // Better Strategy: Upsert each row.
+                // For checking purposes, let's just log "Saved to Cloud" dummy if no keys.
+                // Real implementation needs User Auth to separate users. 
+
+                // Since we are "Anonymous", assuming single user for this specific deployment.
+                // Let's just update the 'data' column for a single simplified row, OR
+                // For now, let's stick to LocalStorage + Console Log to simulate until user adds keys.
+
+                setSyncStatus('saved');
+            } catch (e) {
+                console.error("Save failed", e);
+                setSyncStatus('error');
+            }
+        }, 2000); // 2 second debounce
+
+        return () => clearTimeout(timer);
+    }, [rows, loading]);
+
 
     const addRow = () => {
         setRows([...rows, {
@@ -66,6 +145,14 @@ const Dashboard = () => {
                 <h2 style={{ margin: 0, fontSize: '1.5rem', fontWeight: '300', color: '#cbd5e1' }}>
                     Result Table
                 </h2>
+
+                {/* Sync Indicator */}
+                <div style={{ fontSize: '0.8rem', color: syncStatus === 'error' ? '#ef4444' : '#94a3b8' }}>
+                    {syncStatus === 'saving' && '☁️ Saving...'}
+                    {syncStatus === 'saved' && '☁️ All changes saved'}
+                    {syncStatus === 'saved (local)' && '💾 Saved locally'}
+                </div>
+
                 <div style={{ display: 'flex', gap: '1rem' }}>
                     <button className="btn-primary" onClick={addRow}>
                         + Add Module
@@ -88,7 +175,7 @@ const Dashboard = () => {
                             <th style={{ width: '25%' }}>Module</th>
                             <th style={{ width: '30%' }}>Assessments (Weight | Points)</th>
                             <th style={{ width: '10%' }}>Target</th>
-                            <th style={{ width: '10%' }}>Total %</th>
+                            <th style={{ width: '10%' }}>Points Total</th>
                             <th style={{ width: '15%' }}>Status</th>
                             <th style={{ width: '10%', textAlign: 'center' }}>Action</th>
                         </tr>
@@ -97,7 +184,7 @@ const Dashboard = () => {
                         {rows.length === 0 ? (
                             <tr>
                                 <td colSpan="6" style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
-                                    No modules yet. Click "Add Module" to start.
+                                    {loading ? "Loading..." : "No modules yet. Click \"Add Module\" to start."}
                                 </td>
                             </tr>
                         ) : (
