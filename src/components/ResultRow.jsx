@@ -5,23 +5,22 @@ const ResultRow = ({ data, onChange, onDelete }) => {
     const [statusColor, setStatusColor] = useState('gray');
     const [statusMessage, setStatusMessage] = useState('Start');
 
-    // Calculate Weighted Average Logic
-    const calculatedScore = useMemo(() => {
+    // Calculate Weighted Average Logic & Total Weight
+    const { calculatedScore, totalWeight } = useMemo(() => {
         let totalScore = 0;
-        let totalWeight = 0;
+        let totalW = 0;
 
         tests.forEach(test => {
             const w = parseFloat(test.weight) || 0;
             const s = parseFloat(test.score) || 0;
             totalScore += (w * s);
-            totalWeight += w;
+            totalW += w;
         });
 
-        if (totalWeight === 0) return 0;
+        // Avoid division by zero
+        const score = totalW === 0 ? 0 : (totalScore / totalW).toFixed(1);
 
-        // Normalize: If weights don't sum to 100, we just take the weighted average (Total / WeightSum).
-        // Usually result slips might imply WeightSum = 100, but being flexible is safer.
-        return (totalScore / totalWeight).toFixed(1);
+        return { calculatedScore: score, totalWeight: totalW };
     }, [tests]);
 
     // Status Logic
@@ -57,7 +56,6 @@ const ResultRow = ({ data, onChange, onDelete }) => {
     };
 
     const addTest = () => {
-        // New test structure: Name, Weight, Score
         const newTests = [...tests, { name: `Test ${tests.length + 1}`, weight: '', score: '' }];
         handleChange('tests', newTests);
     };
@@ -86,13 +84,10 @@ const ResultRow = ({ data, onChange, onDelete }) => {
                 />
             </td>
 
-            {/* 
-         Assessments Column 
-         Updated to show 3 inputs: Name | Weight | Score
-      */}
+            {/* Assessments */}
             <td style={{ verticalAlign: 'top' }}>
                 <div className="flex-col" style={{ gap: '0.5rem' }}>
-                    {/* Header labels for the mini-table inside the cell */}
+                    {/* Header */}
                     {tests.length > 0 && (
                         <div className="flex-row" style={{ fontSize: '0.75rem', color: '#94a3b8', paddingLeft: '4px' }}>
                             <span style={{ width: '80px' }}>Test Name</span>
@@ -115,7 +110,10 @@ const ResultRow = ({ data, onChange, onDelete }) => {
                                 placeholder="W%"
                                 value={test.weight}
                                 onChange={(e) => updateTest(index, 'weight', e.target.value)}
-                                style={{ width: '60px', padding: '0.3rem', fontSize: '0.8rem' }}
+                                style={{
+                                    width: '60px', padding: '0.3rem', fontSize: '0.8rem',
+                                    borderColor: totalWeight !== 100 && test.weight ? '#eab308' : 'var(--glass-border)'
+                                }}
                             />
                             <input
                                 type="number"
@@ -129,7 +127,17 @@ const ResultRow = ({ data, onChange, onDelete }) => {
                             )}
                         </div>
                     ))}
-                    <button className="btn-xs-outline" onClick={addTest}>+ Add Assessment</button>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <button className="btn-xs-outline" onClick={addTest}>+ Add Assessment</button>
+                        <span style={{
+                            fontSize: '0.75rem',
+                            fontWeight: '600',
+                            color: totalWeight === 100 ? '#22c55e' : (totalWeight > 100 ? '#ef4444' : '#eab308')
+                        }}>
+                            Total: {totalWeight}%
+                        </span>
+                    </div>
                 </div>
             </td>
 
@@ -144,7 +152,7 @@ const ResultRow = ({ data, onChange, onDelete }) => {
                 />
             </td>
 
-            {/* Calculated Score (Read Only) */}
+            {/* Calculated Score */}
             <td style={{ verticalAlign: 'top' }}>
                 <div style={{
                     marginTop: '1.2rem',
