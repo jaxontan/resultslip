@@ -86,7 +86,7 @@ const Dashboard = () => {
                     <thead>
                         <tr>
                             <th style={{ width: '25%' }}>Module</th>
-                            <th style={{ width: '30%' }}>Assessments (Weight | Score)</th>
+                            <th style={{ width: '30%' }}>Assessments (Weight | Points)</th>
                             <th style={{ width: '10%' }}>Target</th>
                             <th style={{ width: '10%' }}>Total %</th>
                             <th style={{ width: '15%' }}>Status</th>

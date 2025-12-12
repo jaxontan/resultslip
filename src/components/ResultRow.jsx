@@ -5,7 +5,7 @@ const ResultRow = ({ data, onChange, onDelete }) => {
     const [statusColor, setStatusColor] = useState('gray');
     const [statusMessage, setStatusMessage] = useState('Start');
 
-    // Calculate Weighted Average Logic & Total Weight
+    // Calculate Sum of Scores & Total Weight
     const { calculatedScore, totalWeight } = useMemo(() => {
         let totalScore = 0;
         let totalW = 0;
@@ -13,14 +13,11 @@ const ResultRow = ({ data, onChange, onDelete }) => {
         tests.forEach(test => {
             const w = parseFloat(test.weight) || 0;
             const s = parseFloat(test.score) || 0;
-            totalScore += (w * s);
+            totalScore += s; // Simply sum the scores (Points Obtained)
             totalW += w;
         });
 
-        // Avoid division by zero
-        const score = totalW === 0 ? 0 : (totalScore / totalW).toFixed(1);
-
-        return { calculatedScore: score, totalWeight: totalW };
+        return { calculatedScore: totalScore.toFixed(1), totalWeight: totalW };
     }, [tests]);
 
     // Status Logic
@@ -92,7 +89,7 @@ const ResultRow = ({ data, onChange, onDelete }) => {
                         <div className="flex-row" style={{ fontSize: '0.75rem', color: '#94a3b8', paddingLeft: '4px' }}>
                             <span style={{ width: '80px' }}>Test Name</span>
                             <span style={{ width: '60px' }}>Weight %</span>
-                            <span style={{ width: '60px' }}>Score %</span>
+                            <span style={{ width: '60px' }}>Points</span>
                         </div>
                     )}
 
